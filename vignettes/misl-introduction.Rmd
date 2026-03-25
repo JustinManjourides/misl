@@ -153,19 +153,41 @@ misl_stack <- misl(
 ### Analysing the imputed datasets
 
 After imputation, fit your analysis model to each of the `m` datasets and pool
-the results using Rubin's rules via the `mice` package:
+the results using Rubin's rules. Here we implement pooling manually using base R:
 
 ```{r pool-results}
-library(mice)
-
 # Fit a linear model to each imputed dataset
 models <- lapply(misl_imp, function(imp) {
   lm(sbp ~ age + bmi + smoker + group, data = imp$datasets)
 })
 
-# Pool estimates using Rubin's rules
-pooled <- summary(pool(models), conf.int = TRUE)
+# Pool point estimates and standard errors using Rubin's rules
+m       <- length(models)
+ests    <- sapply(models, function(fit) coef(fit))
+vars    <- sapply(models, function(fit) diag(vcov(fit)))
+
+Q_bar   <- rowMeans(ests)                          # pooled estimate
+U_bar   <- rowMeans(vars)                          # within-imputation variance
+B       <- apply(ests, 1, var)                     # between-imputation variance
+T_total <- U_bar + (1 + 1 / m) * B                # total variance
+
+pooled <- data.frame(
+  term     = names(Q_bar),
+  estimate = round(Q_bar, 4),
+  std.error = round(sqrt(T_total), 4),
+  conf.low  = round(Q_bar - 1.96 * sqrt(T_total), 4),
+  conf.high = round(Q_bar + 1.96 * sqrt(T_total), 4)
+)
 print(pooled)
+```
+
+For a full implementation of Rubin's rules including degrees of freedom and
+p-values, the `mice` package provides `pool()` and can be used directly with
+`misl` output:
+
+```{r pool-mice, eval = FALSE}
+library(mice)
+pooled_mice <- summary(pool(models), conf.int = TRUE)
 ```
 
 ### Convergence: trace plots
