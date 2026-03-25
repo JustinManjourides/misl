@@ -1,6 +1,7 @@
 ## R CMD check results
 
-Duration: 1m 29.4s
+── R CMD check results ───────────── misl 1.0.0 ────
+Duration: 1m 9.3s
 
 0 errors ✔ | 0 warnings ✔ | 0 notes ✔
 
