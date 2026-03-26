@@ -92,6 +92,9 @@ misl <- function(dataset,
 
   # --- 0. Validity checks ---
   check_dataset(dataset)
+  if (!is.numeric(cv_folds) || cv_folds < 2 || cv_folds != as.integer(cv_folds)) {
+    stop("'cv_folds' must be an integer >= 2.")
+  }
   dataset <- tibble::as_tibble(dataset)
 
   if (!is.na(seed)) set.seed(seed)
@@ -411,9 +414,8 @@ check_datatype <- function(x) {
       recipes::step_normalize(recipes::all_numeric_predictors())
   }
 
-  build_fit <- function(df) {
-    rec <- make_recipe(df)
-    wf  <- workflows::workflow() |>
+  build_fit <- function(df, rec) {
+    wf <- workflows::workflow() |>
       workflows::add_recipe(rec) |>
       workflows::add_model(make_spec(learner_names[[1]]))
 
@@ -424,7 +426,7 @@ check_datatype <- function(x) {
       # Multiple learners: build a stacked ensemble
       # allow_par = FALSE prevents inner parallelism conflicting with
       # the outer future_lapply across m datasets.
-      cv        <- rsample::vfold_cv(df, v = cv_folds)   # <-- now uses cv_folds
+      cv        <- rsample::vfold_cv(df, v = cv_folds)
       ctrl      <- stacks::control_stack_resamples()
       ctrl$allow_par <- FALSE
       stack_obj <- stacks::stacks()
@@ -443,8 +445,12 @@ check_datatype <- function(x) {
     }
   }
 
+  # Build the recipe once from full_data so that step_zv/step_nzv drop the
+  # same predictors for both the bootstrap and full fits.
+  shared_rec <- make_recipe(full_data)
+
   list(
-    boot = build_fit(train_data),
-    full = if (outcome_type == "continuous") build_fit(full_data) else NULL
+    boot = build_fit(train_data, shared_rec),
+    full = if (outcome_type == "continuous") build_fit(full_data, shared_rec) else NULL
   )
 }

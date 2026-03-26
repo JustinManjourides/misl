@@ -233,6 +233,13 @@ test_that("misl() cv_folds is ignored for single learner", {
   expect_false(anyNA(result[[1]]$datasets))
 })
 
+test_that("misl() errors on invalid cv_folds", {
+  df <- make_cont_data()
+  expect_error(misl(df, m = 1, maxit = 1, con_method = "glm", cv_folds = 1),   "'cv_folds' must be an integer >= 2.")
+  expect_error(misl(df, m = 1, maxit = 1, con_method = "glm", cv_folds = 1.5), "'cv_folds' must be an integer >= 2.")
+  expect_error(misl(df, m = 1, maxit = 1, con_method = "glm", cv_folds = "3"), "'cv_folds' must be an integer >= 2.")
+})
+
 # ── misl() -- binomial bootstrap guard ───────────────────────────────────────
 
 test_that("misl() handles imbalanced binary columns without error", {
@@ -288,14 +295,11 @@ test_that("misl() runs with multinom_reg for categorical outcome", {
 # ── misl() -- error handling ──────────────────────────────────────────────────
 
 test_that("misl() errors with a helpful message for unknown learner", {
-  err <- tryCatch(
-    misl(make_cont_data(), m = 1, maxit = 1, con_method = "lasso"),
-    error = function(e) e
-  )
-  expect_match(
-    conditionMessage(err) %||% paste(err),
-    "Unknown learner",
-    fixed = FALSE
+  suppressWarnings(
+    expect_error(
+      misl(make_cont_data(), m = 1, maxit = 1, con_method = "lasso"),
+      "Unknown learner"
+    )
   )
 })
 
@@ -304,13 +308,10 @@ test_that("misl() errors with install hint for missing backend package", {
     requireNamespace = function(pkg, ...) if (pkg == "xgboost") FALSE else TRUE,
     .package = "base"
   )
-  err <- tryCatch(
-    misl(make_cont_data(), m = 1, maxit = 1, con_method = "boost_tree"),
-    error = function(e) e
-  )
-  expect_match(
-    conditionMessage(err) %||% paste(err),
-    "install.packages",
-    fixed = FALSE
+  suppressWarnings(
+    expect_error(
+      misl(make_cont_data(), m = 1, maxit = 1, con_method = "boost_tree"),
+      "install.packages"
+    )
   )
 })
