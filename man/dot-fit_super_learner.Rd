@@ -10,8 +10,13 @@
   xvars,
   yvar,
   outcome_type,
-  learner_names
+  learner_names,
+  cv_folds = 5
 )
+}
+\arguments{
+\item{cv_folds}{Integer number of cross-validation folds used when stacking
+multiple learners. Ignored when only a single learner is supplied.}
 }
 \value{
 Named list with \code{$boot} (fit on bootstrap sample) and

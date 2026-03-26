@@ -86,7 +86,7 @@ The primary function is `misl()`. Supply a dataset and specify:
 Use `list_learners()` to see available options:
 
 ```{r list-learners}
-list_learners()
+knitr::kable(list_learners())
 ```
 
 Running `misl()` with a single learner per outcome type is the fastest option

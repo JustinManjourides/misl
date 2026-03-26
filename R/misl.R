@@ -186,7 +186,8 @@ misl <- function(dataset,
             xvars         = xvars,
             yvar          = col,
             outcome_type  = outcome_type,
-            learner_names = learner_names
+            learner_names = learner_names,
+            cv_folds      = cv_folds        # <-- now passed through
           )
 
           # --- 4. Impute ---
@@ -335,11 +336,13 @@ check_datatype <- function(x) {
 
 #' Fit a stacked super learner ensemble
 #'
+#' @param cv_folds Integer number of cross-validation folds used when stacking
+#'   multiple learners. Ignored when only a single learner is supplied.
 #' @return Named list with \code{$boot} (fit on bootstrap sample) and
 #'   \code{$full} (fit on full observed data; \code{NULL} unless continuous).
 #' @keywords internal
 .fit_super_learner <- function(train_data, full_data, xvars, yvar,
-                               outcome_type, learner_names) {
+                               outcome_type, learner_names, cv_folds = 5) {
 
   mode <- if (outcome_type == "continuous") "regression" else "classification"
 
@@ -421,7 +424,7 @@ check_datatype <- function(x) {
       # Multiple learners: build a stacked ensemble
       # allow_par = FALSE prevents inner parallelism conflicting with
       # the outer future_lapply across m datasets.
-      cv        <- rsample::vfold_cv(df, v = 5)
+      cv        <- rsample::vfold_cv(df, v = cv_folds)   # <-- now uses cv_folds
       ctrl      <- stacks::control_stack_resamples()
       ctrl$allow_par <- FALSE
       stack_obj <- stacks::stacks()
