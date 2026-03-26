@@ -42,6 +42,16 @@ make_mixed_data <- function(n = 80, seed = 4) {
   df
 }
 
+make_factor_bin_data <- function(n = 50, seed = 5) {
+  set.seed(seed)
+  df <- data.frame(
+    x = rnorm(n),
+    y = factor(sample(c("Yes", "No"), n, replace = TRUE))
+  )
+  df[sample(n, 10), "y"] <- NA
+  df
+}
+
 # ── check_dataset() ───────────────────────────────────────────────────────────
 
 test_that("check_dataset() errors on non-data-frame input", {
@@ -67,7 +77,12 @@ test_that("check_dataset() passes silently on valid incomplete data", {
 # ── check_datatype() ──────────────────────────────────────────────────────────
 
 test_that("check_datatype() identifies categorical columns", {
-  expect_equal(check_datatype(factor(c("a", "b", "a"))), "categorical")
+  expect_equal(check_datatype(factor(c("a", "b", "c"))), "categorical")
+})
+
+test_that("check_datatype() identifies two-level factor as binomial", {
+  expect_equal(check_datatype(factor(c("Yes", "No", "Yes", NA))), "binomial")
+  expect_equal(check_datatype(factor(c("A", "B"))),                "binomial")
 })
 
 test_that("check_datatype() identifies binomial columns", {
@@ -168,6 +183,12 @@ test_that("misl() produces no NAs for mixed outcome types", {
   expect_false(anyNA(result[[1]]$datasets))
 })
 
+test_that("misl() produces no NAs for factor-coded binary outcome", {
+  result <- misl(make_factor_bin_data(), m = 2, maxit = 2,
+                 bin_method = "glm", seed = 5)
+  expect_false(anyNA(result[[1]]$datasets))
+})
+
 # ── misl() -- imputed values are plausible ────────────────────────────────────
 
 test_that("misl() binary imputations are only 0 or 1", {
@@ -183,6 +204,15 @@ test_that("misl() categorical imputations stay within observed levels", {
   result <- misl(df, m = 2, maxit = 2, cat_method = "rand_forest", seed = 3)
   for (i in seq_along(result)) {
     expect_true(all(result[[i]]$datasets$y %in% levels(df$y)))
+  }
+})
+
+test_that("misl() factor-coded binary imputations stay within observed levels", {
+  df     <- make_factor_bin_data()
+  result <- misl(df, m = 2, maxit = 2, bin_method = "glm", seed = 5)
+  for (i in seq_along(result)) {
+    expect_true(all(result[[i]]$datasets$y %in% levels(df$y)))
+    expect_s3_class(result[[i]]$datasets$y, "factor")
   }
 })
 
@@ -211,6 +241,14 @@ test_that("misl() trace has mean and sd rows for continuous columns", {
   y_rows <- trace[trace$variable == "y", ]
   expect_true("mean" %in% y_rows$statistic)
   expect_true("sd"   %in% y_rows$statistic)
+})
+
+test_that("misl() trace is NA for factor-coded binary columns", {
+  result <- misl(make_factor_bin_data(), m = 1, maxit = 2,
+                 bin_method = "glm", seed = 5)
+  trace  <- result[[1]]$trace
+  y_rows <- trace[trace$variable == "y", ]
+  expect_true(all(is.na(y_rows$value)))
 })
 
 # ── misl() -- cv_folds parameter ─────────────────────────────────────────────

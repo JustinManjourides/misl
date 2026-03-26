@@ -1,13 +1,20 @@
 Package: misl
 Title: Multiple Imputation by Super Learning
 Version: 1.0.0
-Authors@R: 
+Authors@R:c(
     person(
       given   = "Justin",
       family  = "Manjourides",
       email   = "j.manjourides@northeastern.edu",
-      role    = c("aut", "cre"),
+      role    = c("aut", "cre")
+    ),
+    person(
+      given   = "Thomas",
+      family  = "Carpenito",
+      email   = "email@example.com",
+      role    = "aut"
     )
+  )
 Description: Performs multiple imputation of missing data using an ensemble
     super learner built with the tidymodels framework. For each incomplete
     column, a stacked ensemble of candidate learners is trained on a bootstrap

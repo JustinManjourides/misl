@@ -197,9 +197,15 @@ misl <- function(dataset,
           pred_data <- data_cur[, xvars, drop = FALSE]
 
           if (outcome_type == "binomial") {
-            preds        <- predict(sl_fit$boot, new_data = pred_data, type = "prob")[[".pred_1"]]
-            imputed_vals <- as.integer(stats::runif(length(preds)) <= preds)
-            data_cur[[col]] <- ifelse(miss_idx, imputed_vals, dataset[[col]])
+            lvls         <- if (is.factor(dataset[[col]])) levels(dataset[[col]]) else c(0L, 1L)
+            preds        <- predict(sl_fit$boot, new_data = pred_data, type = "prob")[[2]]
+            imputed_vals <- lvls[as.integer(stats::runif(length(preds)) <= preds) + 1L]
+
+            data_cur[[col]] <- if (is.factor(dataset[[col]])) {
+              factor(ifelse(miss_idx, imputed_vals, as.character(dataset[[col]])), levels = lvls)
+            } else {
+              ifelse(miss_idx, as.integer(imputed_vals), dataset[[col]])
+            }
 
           } else if (outcome_type == "continuous") {
             preds_boot      <- predict(sl_fit$boot, new_data = pred_data)[[".pred"]]
@@ -233,12 +239,14 @@ misl <- function(dataset,
           # --- 5. Trace statistics ---
           if (outcome_type != "categorical" && any(miss_idx)) {
             imp_vals <- data_cur[[col]][miss_idx]
-            rows <- trace_plot$variable == col &
-              trace_plot$m         == m_loop &
-              trace_plot$iteration == i_loop
+            if (is.numeric(imp_vals)) {
+              rows <- trace_plot$variable == col &
+                trace_plot$m         == m_loop &
+                trace_plot$iteration == i_loop
 
-            trace_plot$value[rows & trace_plot$statistic == "mean"] <- mean(imp_vals)
-            trace_plot$value[rows & trace_plot$statistic == "sd"]   <- stats::sd(imp_vals)
+              trace_plot$value[rows & trace_plot$statistic == "mean"] <- mean(imp_vals)
+              trace_plot$value[rows & trace_plot$statistic == "sd"]   <- stats::sd(imp_vals)
+            }
           }
 
         } # end column loop
@@ -331,8 +339,9 @@ check_dataset <- function(dataset) {
 #' @return One of \code{"categorical"}, \code{"binomial"}, or \code{"continuous"}.
 #' @keywords internal
 check_datatype <- function(x) {
-  if (is.factor(x))             return("categorical")
-  if (all(x %in% c(0, 1, NA))) return("binomial")
+  if (is.factor(x) && nlevels(x) > 2)  return("categorical")
+  if (is.factor(x) && nlevels(x) <= 2) return("binomial")
+  if (all(x %in% c(0, 1, NA)))         return("binomial")
   return("continuous")
 }
 
@@ -431,12 +440,37 @@ check_datatype <- function(x) {
       ctrl$allow_par <- FALSE
       stack_obj <- stacks::stacks()
 
+      n_candidates <- 0L
       for (nm in learner_names) {
         wf_nm <- workflows::workflow() |>
           workflows::add_recipe(rec) |>
           workflows::add_model(make_spec(nm))
-        rs        <- tune::fit_resamples(wf_nm, resamples = cv, control = ctrl)
-        stack_obj <- stacks::add_candidates(stack_obj, rs, name = nm)
+        rs <- tryCatch(
+          tune::fit_resamples(wf_nm, resamples = cv, control = ctrl),
+          error = function(e) {
+            warning("Learner '", nm, "' failed during resampling and will be skipped: ",
+                    conditionMessage(e))
+            NULL
+          }
+        )
+        if (!is.null(rs)) {
+          stack_obj    <- tryCatch(
+            stacks::add_candidates(stack_obj, rs, name = nm),
+            error = function(e) {
+              warning("Learner '", nm, "' could not be added to the stack and will be skipped: ",
+                      conditionMessage(e))
+              stack_obj
+            }
+          )
+          n_candidates <- n_candidates + 1L
+        }
+      }
+
+      # If no candidates were successfully added, fall back to the first learner
+      if (n_candidates == 0L) {
+        warning("All learners failed during stacking; falling back to '",
+                learner_names[[1]], "' fitted directly.")
+        return(workflows::fit(wf, data = df))
       }
 
       stack_obj |>
