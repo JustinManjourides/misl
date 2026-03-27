@@ -46,6 +46,11 @@ NULL
 #' }
 #' Use \code{\link{list_learners}()} to explore available options.
 #'
+#' Numeric columns containing only 0s and 1s are automatically treated as
+#' binary outcomes. Columns intended as continuous should be converted to a
+#' non-binary numeric range, and columns intended as categorical should be
+#' explicitly encoded as factors, before passing to \code{misl()}.
+#'
 #' @section Parallelism:
 #' Imputation across the \code{m} datasets is parallelised via
 #' \pkg{future.apply}. To enable parallel execution, set a \pkg{future} plan
@@ -402,6 +407,10 @@ check_datatype <- function(x) {
              if (mode == "regression") {
                stop("Learner 'multinom_reg' is only valid for categorical outcomes.")
              }
+             if (outcome_type == "binomial") {
+               stop("Learner 'multinom_reg' is only valid for categorical outcomes, not binary. ",
+                    "Use 'glm' or another learner for binary variables.")
+             }
              parsnip::multinom_reg() |> parsnip::set_engine("nnet")
            },
            stop("Unknown learner: '", name, "'. See list_learners() for valid options.")
@@ -424,59 +433,82 @@ check_datatype <- function(x) {
   }
 
   build_fit <- function(df, rec) {
-    wf <- workflows::workflow() |>
-      workflows::add_recipe(rec) |>
-      workflows::add_model(make_spec(learner_names[[1]]))
-
     if (length(learner_names) == 1) {
       # Single learner: skip stacking, fit directly
-      workflows::fit(wf, data = df)
-    } else {
-      # Multiple learners: build a stacked ensemble
-      # allow_par = FALSE prevents inner parallelism conflicting with
-      # the outer future_lapply across m datasets.
-      cv        <- rsample::vfold_cv(df, v = cv_folds)
-      ctrl      <- stacks::control_stack_resamples()
-      ctrl$allow_par <- FALSE
-      stack_obj <- stacks::stacks()
+      wf <- workflows::workflow() |>
+        workflows::add_recipe(rec) |>
+        workflows::add_model(make_spec(learner_names[[1]]))
+      return(workflows::fit(wf, data = df))
+    }
 
-      n_candidates <- 0L
-      for (nm in learner_names) {
-        wf_nm <- workflows::workflow() |>
-          workflows::add_recipe(rec) |>
-          workflows::add_model(make_spec(nm))
-        rs <- tryCatch(
-          tune::fit_resamples(wf_nm, resamples = cv, control = ctrl),
+    # Multiple learners: build a stacked ensemble.
+    # Note: ctrl$allow_par = FALSE is a best-effort attempt to suppress inner
+    # parallelism within each future worker. This field assignment may be a
+    # no-op depending on the installed version of stacks; if over-subscription
+    # is a concern, set a sequential plan for the inner workers explicitly.
+    cv        <- rsample::vfold_cv(df, v = cv_folds)
+    ctrl      <- stacks::control_stack_resamples()
+    ctrl$allow_par <- FALSE
+    stack_obj <- stacks::stacks()
+
+    n_candidates        <- 0L
+    # Track which learners successfully enter the stack so the fallback
+    # attempts them in order rather than blindly using learner_names[[1]],
+    # which may itself have been the learner that failed.
+    successful_learners <- character(0)
+
+    for (nm in learner_names) {
+      wf_nm <- workflows::workflow() |>
+        workflows::add_recipe(rec) |>
+        workflows::add_model(make_spec(nm))
+      rs <- tryCatch(
+        tune::fit_resamples(wf_nm, resamples = cv, control = ctrl),
+        error = function(e) {
+          warning("Learner '", nm, "' failed during resampling and will be skipped: ",
+                  conditionMessage(e))
+          NULL
+        }
+      )
+      if (!is.null(rs)) {
+        added <- tryCatch(
+          stacks::add_candidates(stack_obj, rs, name = nm),
           error = function(e) {
-            warning("Learner '", nm, "' failed during resampling and will be skipped: ",
+            warning("Learner '", nm, "' could not be added to the stack and will be skipped: ",
                     conditionMessage(e))
             NULL
           }
         )
-        if (!is.null(rs)) {
-          stack_obj    <- tryCatch(
-            stacks::add_candidates(stack_obj, rs, name = nm),
-            error = function(e) {
-              warning("Learner '", nm, "' could not be added to the stack and will be skipped: ",
-                      conditionMessage(e))
-              stack_obj
-            }
-          )
-          n_candidates <- n_candidates + 1L
+        if (!is.null(added)) {
+          stack_obj           <- added
+          n_candidates        <- n_candidates + 1L
+          successful_learners <- c(successful_learners, nm)
         }
       }
-
-      # If no candidates were successfully added, fall back to the first learner
-      if (n_candidates == 0L) {
-        warning("All learners failed during stacking; falling back to '",
-                learner_names[[1]], "' fitted directly.")
-        return(workflows::fit(wf, data = df))
-      }
-
-      stack_obj |>
-        stacks::blend_predictions() |>
-        stacks::fit_members()
     }
+
+    # If no candidates were successfully added, fall back to the first viable
+    # learner rather than always learner_names[[1]], which may itself have been
+    # the one that failed.
+    if (n_candidates == 0L) {
+      fallback_nm <- NULL
+      for (nm in learner_names) {
+        ok <- tryCatch({ make_spec(nm); TRUE }, error = function(e) FALSE)
+        if (ok) { fallback_nm <- nm; break }
+      }
+      if (is.null(fallback_nm)) {
+        stop("All learners failed during stacking and no viable fallback could be found.")
+      }
+      warning("All learners failed during stacking; falling back to '",
+              fallback_nm, "' fitted directly.")
+      wf_fallback <- workflows::workflow() |>
+        workflows::add_recipe(rec) |>
+        workflows::add_model(make_spec(fallback_nm))
+      return(workflows::fit(wf_fallback, data = df))
+    }
+
+    stack_obj |>
+      stacks::blend_predictions() |>
+      stacks::fit_members()
   }
 
   # Build the recipe once from full_data so that step_zv/step_nzv drop the
