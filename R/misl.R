@@ -1,4 +1,4 @@
-# misl.R
+# misl2.R
 # Multiple Imputation by Super Learning - Version 2.0
 # Changes from v1.0:
 #   - *_method arguments now accept parsnip model specs in addition to
@@ -133,6 +133,21 @@ misl <- function(dataset,
   bin_method <- as.list(bin_method)
   cat_method <- as.list(cat_method)
   ord_method <- as.list(ord_method)
+
+  # If ord_method contains "polr" alongside other learners, polr cannot
+  # currently be stacked. Warn and reduce to polr only — but only if the
+  # dataset actually contains an ordinal variable, to avoid spurious warnings.
+  has_ordinal <- any(sapply(dataset, function(x)
+    is.factor(x) && nlevels(x) > 2 && is.ordered(x)))
+
+  if (has_ordinal && "polr" %in% ord_method && length(ord_method) > 1L) {
+    warning(
+      "'polr' cannot currently be stacked with other ordinal learners. ",
+      "Using 'polr' as the sole ordinal learner and ignoring others. ",
+      "See list_learners() for details."
+    )
+    ord_method <- list("polr")
+  }
 
   dataset <- tibble::as_tibble(dataset)
 
@@ -356,6 +371,15 @@ list_learners <- function(outcome_type = "all", installed_only = FALSE) {
   if (nrow(registry) == 0) {
     message("No learners found for the specified filters.")
     return(invisible(tibble::tibble()))
+  }
+
+  if (outcome_type %in% c("all", "ordinal")) {
+    message(
+      "Note: 'polr' cannot currently be stacked with other ordinal learners. ",
+      "When 'polr' is supplied alongside other learners in ord_method, it will ",
+      "be used as the sole ordinal learner and others will be ignored. ",
+      "Full stacking support for ordinal outcomes is planned for a future release."
+    )
   }
 
   registry

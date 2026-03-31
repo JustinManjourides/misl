@@ -12,7 +12,11 @@
   `ord_method`.
 
 * New built-in learner `"polr"` (proportional odds logistic regression via
-  `MASS::polr()`) for ordinal outcomes.
+  `MASS::polr()`) for ordinal outcomes. Note that `"polr"` cannot currently
+  be stacked with other ordinal learners — when supplied alongside other
+  learners in `ord_method`, `"polr"` will be used as the sole ordinal learner
+  and others will be ignored with a warning. Full stacking support for ordinal
+  outcomes is planned for a future release.
 
 * New `plot_misl_trace()` function for visualising convergence of imputed
   values across iterations, with one line per imputed dataset.
@@ -46,10 +50,6 @@
   cross-validation resampling. Previously a single learner failure would crash
   the entire imputation. Failed learners are now skipped with a warning, and if
   all learners fail the first learner is used as a fallback.
-
-# misl 1.0.0
-
-* Initial CRAN submission.
 
 # misl 1.0.0
 
