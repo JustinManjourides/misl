@@ -2,6 +2,12 @@
 
 export(list_learners)
 export(misl)
+export(plot_misl_trace)
+importFrom(graphics,axis)
+importFrom(graphics,legend)
+importFrom(graphics,lines)
+importFrom(graphics,plot)
+importFrom(graphics,points)
 importFrom(stats,as.formula)
 importFrom(stats,predict)
 importFrom(stats,runif)

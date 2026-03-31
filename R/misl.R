@@ -1,18 +1,21 @@
 # misl.R
-# Multiple Imputation by Super Learning
-# Refactored to use tidymodels + stacks (replacing sl3 / delayed)
-#
-# Dependencies:
-#   tidymodels, stacks, future.apply, ranger, xgboost, earth
+# Multiple Imputation by Super Learning - Version 2.0
+# Changes from v1.0:
+#   - *_method arguments now accept parsnip model specs in addition to
+#     named character strings, allowing any parsnip-compatible learner
+#   - New ord_method argument for ordered categorical (ordinal) outcomes
+#   - check_datatype() now distinguishes ordered from unordered factors
+#   - list_learners() updated with ordinal column and polr learner
 
 #' @importFrom stats predict runif sd as.formula
+#' @importFrom graphics plot axis lines points legend
 NULL
 
 # ---------------------------------------------------------------------------- #
 # Public API
 # ---------------------------------------------------------------------------- #
 
-#' MISL: Multiple Imputation by Super Learning
+#' MISL: Multiple Imputation by Super Learning (v2.0)
 #'
 #' Imputes missing values using multiple imputation by super learning.
 #'
@@ -21,12 +24,19 @@ NULL
 #' @param m The number of multiply imputed datasets to create. Default \code{5}.
 #' @param maxit The number of iterations per imputed dataset. Default \code{5}.
 #' @param seed Integer seed for reproducibility, or \code{NA} to skip. Default \code{NA}.
-#' @param con_method Character vector of learner IDs for continuous columns.
+#' @param con_method Character vector of learner IDs, a list of parsnip model
+#'   specs, or a mixed list of both, for continuous columns.
 #'   Default \code{c("glm", "rand_forest", "boost_tree")}.
-#' @param bin_method Character vector of learner IDs for binary columns
-#'   (values must be \code{0/1/NA}). Default \code{c("glm", "rand_forest", "boost_tree")}.
-#' @param cat_method Character vector of learner IDs for categorical columns.
+#' @param bin_method Character vector of learner IDs, a list of parsnip model
+#'   specs, or a mixed list of both, for binary columns
+#'   (values must be \code{0/1/NA} or a two-level factor). Default
+#'   \code{c("glm", "rand_forest", "boost_tree")}.
+#' @param cat_method Character vector of learner IDs, a list of parsnip model
+#'   specs, or a mixed list of both, for unordered categorical columns.
 #'   Default \code{c("rand_forest", "boost_tree")}.
+#' @param ord_method Character vector of learner IDs, a list of parsnip model
+#'   specs, or a mixed list of both, for ordered categorical columns.
+#'   Default \code{c("polr", "rand_forest", "boost_tree")}.
 #' @param cv_folds Integer number of cross-validation folds used when stacking
 #'   multiple learners. Reducing this (e.g. to \code{3}) speeds up computation
 #'   at a small cost to ensemble accuracy. Default \code{5}. Ignored when only
@@ -36,20 +46,30 @@ NULL
 #' @param quiet Suppress console progress messages. Default \code{TRUE}.
 #'
 #' @details
-#' Supported \code{*_method} values and their required packages:
+#' Built-in named learners (see \code{\link{list_learners}()}):
 #' \itemize{
-#'   \item \code{"glm"}          - base R (logistic for binary/categorical, linear for continuous)
+#'   \item \code{"glm"}          - base R (logistic for binary, linear for continuous)
 #'   \item \code{"rand_forest"}  - \pkg{ranger}
 #'   \item \code{"boost_tree"}   - \pkg{xgboost}
 #'   \item \code{"mars"}         - \pkg{earth}
-#'   \item \code{"multinom_reg"} - \pkg{nnet} (categorical only)
+#'   \item \code{"multinom_reg"} - \pkg{nnet} (unordered categorical only)
+#'   \item \code{"polr"}         - \pkg{MASS} (ordered categorical only)
 #' }
-#' Use \code{\link{list_learners}()} to explore available options.
 #'
-#' Numeric columns containing only 0s and 1s are automatically treated as
-#' binary outcomes. Columns intended as continuous should be converted to a
-#' non-binary numeric range, and columns intended as categorical should be
-#' explicitly encoded as factors, before passing to \code{misl()}.
+#' Any parsnip-compatible model spec can also be passed directly via the
+#' \code{*_method} arguments. Named strings and parsnip specs can be mixed
+#' in the same list:
+#' \preformatted{
+#' library(parsnip)
+#' misl(data,
+#'   con_method = list(
+#'     "glm",
+#'     rand_forest(trees = 500) |> set_engine("ranger")
+#'   )
+#' )
+#' }
+#' The mode (regression vs classification) is always enforced by \code{misl}
+#' regardless of what is set on the spec.
 #'
 #' @section Parallelism:
 #' Imputation across the \code{m} datasets is parallelised via
@@ -61,8 +81,6 @@ NULL
 #' result <- misl(data, m = 5)
 #' plan(sequential)
 #' }
-#' The inner cross-validation fits (used for stacking) run sequentially within
-#' each worker to avoid over-subscribing cores.
 #'
 #' @return A list of \code{m} named lists, each with:
 #'   \describe{
@@ -73,17 +91,24 @@ NULL
 #' @export
 #'
 #' @examples
-#' # Small self-contained example
+#' # Using named learners (same as v1.0)
 #' set.seed(1)
 #' n <- 100
-#' demo_data <- data.frame(
-#'   x1 = rnorm(n),
-#'   x2 = rnorm(n),
-#'   y  = rnorm(n)
-#' )
+#' demo_data <- data.frame(x1 = rnorm(n), x2 = rnorm(n), y = rnorm(n))
 #' demo_data[sample(n, 10), "y"] <- NA
-#'
 #' misl_imp <- misl(demo_data, m = 2, maxit = 2, con_method = "glm")
+#'
+#' # Using a custom parsnip spec
+#' \dontrun{
+#' library(parsnip)
+#' misl_imp <- misl(
+#'   demo_data, m = 2, maxit = 2,
+#'   con_method = list(
+#'     "glm",
+#'     rand_forest(trees = 500) |> set_engine("ranger")
+#'   )
+#' )
+#' }
 misl <- function(dataset,
                  m                 = 5,
                  maxit             = 5,
@@ -91,6 +116,7 @@ misl <- function(dataset,
                  con_method        = c("glm", "rand_forest", "boost_tree"),
                  bin_method        = c("glm", "rand_forest", "boost_tree"),
                  cat_method        = c("rand_forest", "boost_tree"),
+                 ord_method        = c("polr", "rand_forest", "boost_tree"),
                  cv_folds          = 5,
                  ignore_predictors = NA,
                  quiet             = TRUE) {
@@ -100,6 +126,14 @@ misl <- function(dataset,
   if (!is.numeric(cv_folds) || cv_folds < 2 || cv_folds != as.integer(cv_folds)) {
     stop("'cv_folds' must be an integer >= 2.")
   }
+
+  # Coerce *_method arguments to lists for uniform handling downstream,
+  # preserving backwards compatibility with character vector inputs
+  con_method <- as.list(con_method)
+  bin_method <- as.list(bin_method)
+  cat_method <- as.list(cat_method)
+  ord_method <- as.list(ord_method)
+
   dataset <- tibble::as_tibble(dataset)
 
   if (!is.na(seed)) set.seed(seed)
@@ -184,7 +218,8 @@ misl <- function(dataset,
           learner_names <- switch(outcome_type,
                                   continuous  = con_method,
                                   binomial    = bin_method,
-                                  categorical = cat_method
+                                  categorical = cat_method,
+                                  ordinal     = ord_method
           )
 
           # --- 3. Fit stacked super learner ---
@@ -195,7 +230,7 @@ misl <- function(dataset,
             yvar          = col,
             outcome_type  = outcome_type,
             learner_names = learner_names,
-            cv_folds      = cv_folds        # <-- now passed through
+            cv_folds      = cv_folds
           )
 
           # --- 4. Impute ---
@@ -227,8 +262,12 @@ misl <- function(dataset,
               numeric(1)
             )
 
-          } else if (outcome_type == "categorical") {
-            prob_mat     <- as.matrix(predict(sl_fit$boot, new_data = pred_data, type = "prob"))
+          } else if (outcome_type %in% c("categorical", "ordinal")) {
+            prob_mat <- if (inherits(sl_fit$boot, "misl_polr_fit")) {
+              as.matrix(predict(sl_fit$boot, new_data = pred_data, type = "prob"))
+            } else {
+              as.matrix(predict(sl_fit$boot, new_data = pred_data, type = "prob"))
+            }
             lvls         <- levels(dataset[[col]])
             u            <- stats::runif(nrow(prob_mat))
             cum_mat      <- t(apply(prob_mat, 1, cumsum))
@@ -237,12 +276,13 @@ misl <- function(dataset,
 
             data_cur[[col]] <- factor(
               ifelse(miss_idx, imputed_vals, as.character(dataset[[col]])),
-              levels = lvls
+              levels  = lvls,
+              ordered = is.ordered(dataset[[col]])
             )
           }
 
           # --- 5. Trace statistics ---
-          if (outcome_type != "categorical" && any(miss_idx)) {
+          if (!outcome_type %in% c("categorical", "ordinal") && any(miss_idx)) {
             imp_vals <- data_cur[[col]][miss_idx]
             if (is.numeric(imp_vals)) {
               rows <- trace_plot$variable == col &
@@ -265,12 +305,12 @@ misl <- function(dataset,
 
 #' List available learners for MISL imputation
 #'
-#' Displays the learners available for use in \code{\link{misl}()}, optionally
-#' filtered by outcome type and/or whether the required backend package is
-#' installed.
+#' Displays the built-in named learners available for use in
+#' \code{\link{misl}()}. Note that any parsnip-compatible model spec can
+#' also be passed directly via the \code{*_method} arguments.
 #'
 #' @param outcome_type One of \code{"continuous"}, \code{"binomial"},
-#'   \code{"categorical"}, or \code{"all"} (default).
+#'   \code{"categorical"}, \code{"ordinal"}, or \code{"all"} (default).
 #' @param installed_only If \code{TRUE}, only learners whose backend package is
 #'   already installed are returned. Default \code{FALSE}.
 #'
@@ -282,18 +322,21 @@ misl <- function(dataset,
 #' @examples
 #' list_learners()
 #' list_learners("continuous")
+#' list_learners("ordinal")
 #' list_learners("categorical", installed_only = TRUE)
 list_learners <- function(outcome_type = "all", installed_only = FALSE) {
 
-  outcome_type <- match.arg(outcome_type, c("all", "continuous", "binomial", "categorical"))
+  outcome_type <- match.arg(outcome_type,
+                            c("all", "continuous", "binomial", "categorical", "ordinal"))
 
   registry <- tibble::tribble(
-    ~learner,        ~description,                                  ~continuous, ~binomial, ~categorical, ~package,
-    "glm",           "Linear / logistic regression",                TRUE,        TRUE,      FALSE,        "stats",
-    "mars",          "Multivariate adaptive regression splines",    TRUE,        TRUE,      FALSE,        "earth",
-    "multinom_reg",  "Multinomial regression",                      FALSE,       FALSE,     TRUE,         "nnet",
-    "rand_forest",   "Random forest",                               TRUE,        TRUE,      TRUE,         "ranger",
-    "boost_tree",    "Gradient boosted trees",                      TRUE,        TRUE,      TRUE,         "xgboost"
+    ~learner,        ~description,                                  ~continuous, ~binomial, ~categorical, ~ordinal, ~package,
+    "glm",           "Linear / logistic regression",                TRUE,        TRUE,      FALSE,        FALSE,    "stats",
+    "mars",          "Multivariate adaptive regression splines",    TRUE,        TRUE,      FALSE,        FALSE,    "earth",
+    "multinom_reg",  "Multinomial regression",                      FALSE,       FALSE,     TRUE,         FALSE,    "nnet",
+    "polr",          "Proportional odds logistic regression",       FALSE,       FALSE,     FALSE,        TRUE,     "MASS",
+    "rand_forest",   "Random forest",                               TRUE,        TRUE,      TRUE,         TRUE,     "ranger",
+    "boost_tree",    "Gradient boosted trees",                      TRUE,        TRUE,      TRUE,         TRUE,     "xgboost"
   )
 
   registry$installed <- vapply(
@@ -304,7 +347,8 @@ list_learners <- function(outcome_type = "all", installed_only = FALSE) {
 
   if (outcome_type != "all") {
     registry <- registry[registry[[outcome_type]], ]
-    registry <- registry[, !colnames(registry) %in% c("continuous", "binomial", "categorical")]
+    registry <- registry[, !colnames(registry) %in%
+                           c("continuous", "binomial", "categorical", "ordinal")]
   }
 
   if (installed_only) registry <- registry[registry$installed, ]
@@ -341,12 +385,14 @@ check_dataset <- function(dataset) {
 
 #' Determine the outcome type of a column
 #' @param x A vector (one column from the dataset).
-#' @return One of \code{"categorical"}, \code{"binomial"}, or \code{"continuous"}.
+#' @return One of \code{"categorical"}, \code{"ordinal"}, \code{"binomial"},
+#'   or \code{"continuous"}.
 #' @keywords internal
 check_datatype <- function(x) {
-  if (is.factor(x) && nlevels(x) > 2)  return("categorical")
-  if (is.factor(x) && nlevels(x) <= 2) return("binomial")
-  if (all(x %in% c(0, 1, NA)))         return("binomial")
+  if (is.factor(x) && nlevels(x) > 2 && !is.ordered(x)) return("categorical")
+  if (is.factor(x) && nlevels(x) > 2 &&  is.ordered(x)) return("ordinal")
+  if (is.factor(x) && nlevels(x) <= 2)                   return("binomial")
+  if (all(x %in% c(0, 1, NA)))                            return("binomial")
   return("continuous")
 }
 
@@ -363,62 +409,86 @@ check_datatype <- function(x) {
 
   mode <- if (outcome_type == "continuous") "regression" else "classification"
 
-  # Package required by each optional learner (NA = base R, always available)
+  # Package required by each built-in named learner
   learner_pkgs <- c(
     rand_forest  = "ranger",
     boost_tree   = "xgboost",
     mars         = "earth",
-    multinom_reg = "nnet"
+    multinom_reg = "nnet",
+    polr         = "MASS"
   )
 
-  check_learner_pkg <- function(name) {
-    pkg <- learner_pkgs[name]
-    if (!is.na(pkg) && !requireNamespace(pkg, quietly = TRUE)) {
-      stop(
-        "Learner '", name, "' requires the '", pkg, "' package, which is not installed.\n",
-        "  Install it with: install.packages('", pkg, "')"
-      )
-    }
-  }
+  # Resolve a single learner element to a parsnip spec
+  make_spec <- function(x) {
 
-  make_spec <- function(name) {
-    check_learner_pkg(name)
-    switch(name,
-           glm = {
-             if (mode == "regression") parsnip::linear_reg() |> parsnip::set_engine("lm")
-             else                      parsnip::logistic_reg() |> parsnip::set_engine("glm")
-           },
-           rand_forest = {
-             parsnip::rand_forest(trees = 100) |>
-               parsnip::set_engine("ranger") |>
-               parsnip::set_mode(mode)
-           },
-           boost_tree = {
-             parsnip::boost_tree(trees = 100) |>
-               parsnip::set_engine("xgboost") |>
-               parsnip::set_mode(mode)
-           },
-           mars = {
-             parsnip::mars() |>
-               parsnip::set_engine("earth") |>
-               parsnip::set_mode(mode)
-           },
-           multinom_reg = {
-             if (mode == "regression") {
-               stop("Learner 'multinom_reg' is only valid for categorical outcomes.")
-             }
-             if (outcome_type == "binomial") {
-               stop("Learner 'multinom_reg' is only valid for categorical outcomes, not binary. ",
-                    "Use 'glm' or another learner for binary variables.")
-             }
-             parsnip::multinom_reg() |> parsnip::set_engine("nnet")
-           },
-           stop("Unknown learner: '", name, "'. See list_learners() for valid options.")
+    # --- User-supplied parsnip spec ---
+    if (inherits(x, "model_spec")) {
+      return(parsnip::set_mode(x, mode))
+    }
+
+    # --- Named built-in learner ---
+    if (is.character(x)) {
+      pkg <- learner_pkgs[x]
+      if (!is.na(pkg) && !requireNamespace(pkg, quietly = TRUE)) {
+        stop(
+          "Learner '", x, "' requires the '", pkg, "' package, which is not installed.\n",
+          "  Install it with: install.packages('", pkg, "')"
+        )
+      }
+
+      return(switch(x,
+                    glm = {
+                      if (mode == "regression") parsnip::linear_reg()   |> parsnip::set_engine("lm")
+                      else                      parsnip::logistic_reg() |> parsnip::set_engine("glm")
+                    },
+                    rand_forest = {
+                      parsnip::rand_forest(trees = 100) |>
+                        parsnip::set_engine("ranger") |>
+                        parsnip::set_mode(mode)
+                    },
+                    boost_tree = {
+                      parsnip::boost_tree(trees = 100) |>
+                        parsnip::set_engine("xgboost") |>
+                        parsnip::set_mode(mode)
+                    },
+                    mars = {
+                      parsnip::mars() |>
+                        parsnip::set_engine("earth") |>
+                        parsnip::set_mode(mode)
+                    },
+                    multinom_reg = {
+                      if (mode == "regression") {
+                        stop("Learner 'multinom_reg' is only valid for categorical outcomes.")
+                      }
+                      parsnip::multinom_reg() |> parsnip::set_engine("nnet")
+                    },
+                    polr = {
+                      if (mode == "regression") {
+                        stop("Learner 'polr' is only valid for ordinal outcomes.")
+                      }
+                      # polr is handled separately in build_fit() via MASS::polr() directly
+                      "polr"
+                    },
+                    stop("Unknown learner: '", x, "'. See list_learners() for valid options.")
+      ))
+    }
+
+    # --- Neither string nor parsnip spec ---
+    stop(
+      "Each learner must be either a named character string or a parsnip model spec.\n",
+      "  See list_learners() for valid named options, or ?parsnip::model_spec for ",
+      "custom specs."
     )
   }
 
   prep_outcome <- function(df) {
-    if (mode == "classification") df[[yvar]] <- factor(df[[yvar]])
+    if (mode == "classification") {
+      if (outcome_type == "ordinal") {
+        df[[yvar]] <- as.ordered(df[[yvar]])
+      } else {
+        df[[yvar]] <- factor(df[[yvar]])
+      }
+    }
     df
   }
   train_data <- prep_outcome(train_data)
@@ -432,91 +502,219 @@ check_datatype <- function(x) {
       recipes::step_normalize(recipes::all_numeric_predictors())
   }
 
-  build_fit <- function(df, rec) {
-    if (length(learner_names) == 1) {
-      # Single learner: skip stacking, fit directly
-      wf <- workflows::workflow() |>
-        workflows::add_recipe(rec) |>
-        workflows::add_model(make_spec(learner_names[[1]]))
-      return(workflows::fit(wf, data = df))
-    }
-
-    # Multiple learners: build a stacked ensemble.
-    # Note: ctrl$allow_par = FALSE is a best-effort attempt to suppress inner
-    # parallelism within each future worker. This field assignment may be a
-    # no-op depending on the installed version of stacks; if over-subscription
-    # is a concern, set a sequential plan for the inner workers explicitly.
-    cv        <- rsample::vfold_cv(df, v = cv_folds)
-    ctrl      <- stacks::control_stack_resamples()
-    ctrl$allow_par <- FALSE
-    stack_obj <- stacks::stacks()
-
-    n_candidates        <- 0L
-    # Track which learners successfully enter the stack so the fallback
-    # attempts them in order rather than blindly using learner_names[[1]],
-    # which may itself have been the learner that failed.
-    successful_learners <- character(0)
-
-    for (nm in learner_names) {
-      wf_nm <- workflows::workflow() |>
-        workflows::add_recipe(rec) |>
-        workflows::add_model(make_spec(nm))
-      rs <- tryCatch(
-        tune::fit_resamples(wf_nm, resamples = cv, control = ctrl),
-        error = function(e) {
-          warning("Learner '", nm, "' failed during resampling and will be skipped: ",
-                  conditionMessage(e))
-          NULL
-        }
-      )
-      if (!is.null(rs)) {
-        added <- tryCatch(
-          stacks::add_candidates(stack_obj, rs, name = nm),
-          error = function(e) {
-            warning("Learner '", nm, "' could not be added to the stack and will be skipped: ",
-                    conditionMessage(e))
-            NULL
-          }
-        )
-        if (!is.null(added)) {
-          stack_obj           <- added
-          n_candidates        <- n_candidates + 1L
-          successful_learners <- c(successful_learners, nm)
-        }
-      }
-    }
-
-    # If no candidates were successfully added, fall back to the first viable
-    # learner rather than always learner_names[[1]], which may itself have been
-    # the one that failed.
-    if (n_candidates == 0L) {
-      fallback_nm <- NULL
-      for (nm in learner_names) {
-        ok <- tryCatch({ make_spec(nm); TRUE }, error = function(e) FALSE)
-        if (ok) { fallback_nm <- nm; break }
-      }
-      if (is.null(fallback_nm)) {
-        stop("All learners failed during stacking and no viable fallback could be found.")
-      }
-      warning("All learners failed during stacking; falling back to '",
-              fallback_nm, "' fitted directly.")
-      wf_fallback <- workflows::workflow() |>
-        workflows::add_recipe(rec) |>
-        workflows::add_model(make_spec(fallback_nm))
-      return(workflows::fit(wf_fallback, data = df))
-    }
-
-    stack_obj |>
-      stacks::blend_predictions() |>
-      stacks::fit_members()
-  }
-
   # Build the recipe once from full_data so that step_zv/step_nzv drop the
   # same predictors for both the bootstrap and full fits.
   shared_rec <- make_recipe(full_data)
+
+  build_fit <- function(df, rec) {
+
+    # Special case: single polr learner — bypass parsnip entirely
+    if (length(learner_names) == 1 && identical(learner_names[[1]], "polr")) {
+      prepped  <- recipes::prep(rec, training = df)
+      baked    <- recipes::bake(prepped, new_data = df)
+      fmla     <- stats::as.formula(paste(yvar, "~ ."))
+      fit      <- tryCatch(
+        MASS::polr(fmla, data = baked, Hess = TRUE),
+        error = function(e) stop("polr failed during fitting: ", conditionMessage(e))
+      )
+      # Return a lightweight wrapper with a predict method
+      structure(
+        list(fit = fit, recipe = prepped, type = "polr"),
+        class = "misl_polr_fit"
+      )
+    } else {
+      wf <- workflows::workflow() |>
+        workflows::add_recipe(rec) |>
+        workflows::add_model(make_spec(learner_names[[1]]))
+
+      if (length(learner_names) == 1) {
+        # Single non-polr learner: skip stacking, fit directly
+        tryCatch(
+          workflows::fit(wf, data = df),
+          error = function(e) {
+            if (inherits(learner_names[[1]], "model_spec")) {
+              stop(
+                "User-supplied learner failed during fitting.\n",
+                "  Check that the required engine package is installed and that\n",
+                "  the spec is compatible with a ", mode, " outcome.\n",
+                "  Original error: ", conditionMessage(e)
+              )
+            }
+            stop(e)
+          }
+        )
+      } else {
+        # Multiple learners: build a stacked ensemble
+        cv        <- rsample::vfold_cv(df, v = cv_folds)
+        ctrl      <- stacks::control_stack_resamples()
+        ctrl$allow_par <- FALSE
+        stack_obj <- stacks::stacks()
+
+        n_candidates <- 0L
+        for (nm in learner_names) {
+          wf_nm <- workflows::workflow() |>
+            workflows::add_recipe(rec) |>
+            workflows::add_model(make_spec(nm))
+
+          rs <- tryCatch(
+            tune::fit_resamples(wf_nm, resamples = cv, control = ctrl),
+            error = function(e) {
+              if (inherits(nm, "model_spec")) {
+                warning(
+                  "User-supplied learner failed during resampling and will be skipped.\n",
+                  "  Check that the required engine package is installed and that\n",
+                  "  the spec is compatible with a ", mode, " outcome.\n",
+                  "  Original error: ", conditionMessage(e)
+                )
+              } else {
+                warning("Learner '", nm, "' failed during resampling and will be skipped: ",
+                        conditionMessage(e))
+              }
+              NULL
+            }
+          )
+
+          if (!is.null(rs)) {
+            stack_obj <- tryCatch(
+              stacks::add_candidates(stack_obj, rs,
+                                     name = if (is.character(nm)) nm else "custom"),
+              error = function(e) {
+                warning("Learner could not be added to the stack and will be skipped: ",
+                        conditionMessage(e))
+                stack_obj
+              }
+            )
+            n_candidates <- n_candidates + 1L
+          }
+        }
+
+        if (n_candidates == 0L) {
+          warning("All learners failed during stacking; falling back to first learner.")
+          return(
+            tryCatch(
+              workflows::fit(
+                workflows::workflow() |>
+                  workflows::add_recipe(rec) |>
+                  workflows::add_model(make_spec(learner_names[[1]])),
+                data = df
+              ),
+              error = function(e) {
+                if (inherits(learner_names[[1]], "model_spec")) {
+                  stop(
+                    "User-supplied fallback learner failed during fitting.\n",
+                    "  Check that the required engine package is installed and that\n",
+                    "  the spec is compatible with a ", mode, " outcome.\n",
+                    "  Original error: ", conditionMessage(e)
+                  )
+                }
+                stop(e)
+              }
+            )
+          )
+        }
+
+        stack_obj |>
+          stacks::blend_predictions() |>
+          stacks::fit_members()
+      }
+    }
+  }
 
   list(
     boot = build_fit(train_data, shared_rec),
     full = if (outcome_type == "continuous") build_fit(full_data, shared_rec) else NULL
   )
+}
+
+#' Plot trace statistics from a MISL imputation
+#'
+#' Plots the mean or standard deviation of imputed values across iterations
+#' for a given variable, with one line per imputed dataset. Stable traces
+#' that mix well across datasets indicate convergence.
+#'
+#' @param misl_result A list returned by \code{\link{misl}()}.
+#' @param variable A character string naming the variable to plot. Must be
+#'   a continuous or numeric binary column — trace statistics are not
+#'   computed for categorical or ordinal columns.
+#' @param statistic One of \code{"mean"} (default) or \code{"sd"}.
+#' @param ylab A character string for the y-axis label. Defaults to
+#'   \code{"variable (statistic)"}.
+#' @param ... Additional arguments passed to \code{\link[graphics]{plot}()}.
+#'
+#' @return Invisibly returns the trace data used for the plot.
+#' @export
+#'
+#' @examples
+#' set.seed(1)
+#' n <- 100
+#' demo_data <- data.frame(x1 = rnorm(n), x2 = rnorm(n), y = rnorm(n))
+#' demo_data[sample(n, 10), "y"] <- NA
+#' misl_imp <- misl(demo_data, m = 3, maxit = 3, con_method = "glm")
+#' plot_misl_trace(misl_imp, variable = "y")
+#' plot_misl_trace(misl_imp, variable = "y", statistic = "sd")
+plot_misl_trace <- function(misl_result, variable, statistic = "mean", ylab = NULL, ...) {
+
+  statistic <- match.arg(statistic, c("mean", "sd"))
+
+  # Combine trace data across all m datasets
+  trace <- do.call(rbind, lapply(misl_result, function(r) r$trace))
+
+  # Validate variable
+  if (!variable %in% unique(trace$variable)) {
+    stop("'", variable, "' not found in trace data. Available variables: ",
+         paste(unique(trace$variable), collapse = ", "))
+  }
+
+  d <- subset(trace, trace$variable == variable & trace$statistic == statistic)
+
+  # Check trace values are not all NA (categorical/ordinal columns)
+  if (all(is.na(d$value))) {
+    stop("Trace statistics are not available for '", variable,
+         "'. Trace is only computed for continuous and numeric binary columns.")
+  }
+
+  if (is.null(ylab)) {
+    ylab <- paste0(statistic, " imputed ", variable)
+  }
+
+  chains <- unique(d$m)
+
+  graphics::plot(
+    d$iteration, d$value,
+    col  = d$m,
+    pch  = 16,
+    type = "n",
+    xlab = "Iteration",
+    ylab = ylab,
+    main = paste0("Trace: ", statistic, " imputed ", variable),
+    xaxt = "n",
+    ...
+  )
+  graphics::axis(1, at = seq_len(max(d$iteration)))
+
+  for (chain in chains) {
+    d_chain <- d[d$m == chain, ]
+    graphics::lines(d_chain$iteration, d_chain$value, col = chain)
+    graphics::points(d_chain$iteration, d_chain$value, col = chain, pch = 16)
+  }
+
+  graphics::legend(
+    "topright",
+    legend = paste("m =", chains),
+    col    = chains,
+    pch    = 16,
+    lty    = 1,
+    cex    = 0.7
+  )
+
+  invisible(d)
+}
+
+#' Predict method for misl_polr_fit objects
+#' @keywords internal
+predict.misl_polr_fit <- function(object, new_data, type = "prob", ...) {
+  baked <- recipes::bake(object$recipe, new_data = new_data)
+  probs <- predict(object$fit, newdata = baked, type = "probs")
+  if (is.vector(probs)) probs <- matrix(probs, nrow = 1)
+  as.data.frame(probs)
 }

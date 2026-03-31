@@ -1,18 +1,20 @@
 Package: misl
 Title: Multiple Imputation by Super Learning
-Version: 1.0.0
+Version: 2.0.0
 Authors@R:c(
     person(
       given   = "Justin",
       family  = "Manjourides",
       email   = "j.manjourides@northeastern.edu",
-      role    = c("aut", "cre")
+      role    = c("aut", "cre"),
+      comment = c(ORCID = "0000-0002-2454-4489")
     ),
     person(
       given   = "Thomas",
       family  = "Carpenito",
-      email   = "email@example.com",
-      role    = "aut"
+      email   = "carpenito.t@northeastern.edu",
+      role    = "aut",
+      comment = c(ORCID = "0000-0003-3591-0680")
     )
   )
 Description: Performs multiple imputation of missing data using an ensemble
@@ -33,6 +35,7 @@ Depends:
 Imports:
     dplyr (>= 1.1.0),
     future.apply (>= 1.11.0),
+    graphics,
     parsnip (>= 1.2.0),
     recipes (>= 1.0.0),
     rsample (>= 1.2.0),
@@ -47,6 +50,7 @@ Suggests:
     earth (>= 5.3.0),
     future (>= 1.33.0),
     knitr,
+    MASS,
     ranger (>= 0.16.0),
     rmarkdown,
     testthat (>= 3.0.0),
