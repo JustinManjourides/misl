@@ -12,7 +12,7 @@ misl(
   con_method = c("glm", "rand_forest", "boost_tree"),
   bin_method = c("glm", "rand_forest", "boost_tree"),
   cat_method = c("rand_forest", "boost_tree"),
-  ord_method = c("polr", "rand_forest", "boost_tree"),
+  ord_method = c("polr"),
   cv_folds = 5,
   ignore_predictors = NA,
   quiet = TRUE
@@ -43,7 +43,7 @@ Default \code{c("rand_forest", "boost_tree")}.}
 
 \item{ord_method}{Character vector of learner IDs, a list of parsnip model
 specs, or a mixed list of both, for ordered categorical columns.
-Default \code{c("polr", "rand_forest", "boost_tree")}.}
+Default \code{c("polr")}.}
 
 \item{cv_folds}{Integer number of cross-validation folds used when stacking
 multiple learners. Reducing this (e.g. to \code{3}) speeds up computation
