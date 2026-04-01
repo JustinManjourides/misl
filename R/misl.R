@@ -10,6 +10,11 @@
 #' @importFrom stats predict runif sd as.formula
 NULL
 
+# Suppress R CMD check notes for ggplot2 column references
+if (getRversion() >= "2.15.1") {
+  utils::globalVariables(c("iteration", "value", "m", "statistic", "variable"))
+}
+
 # ---------------------------------------------------------------------------- #
 # Public API
 # ---------------------------------------------------------------------------- #
@@ -134,7 +139,7 @@ misl <- function(dataset,
   ord_method <- as.list(ord_method)
 
   # If ord_method contains "polr" alongside other learners, polr cannot
-  # currently be stacked. Warn and reduce to polr only — but only if the
+  # currently be stacked. Warn and reduce to polr only -- but only if the
   # dataset actually contains an ordinal variable, to avoid spurious warnings.
   has_ordinal <- any(sapply(dataset, function(x)
     is.factor(x) && nlevels(x) > 2 && is.ordered(x)))
@@ -531,7 +536,7 @@ check_datatype <- function(x) {
 
   build_fit <- function(df, rec) {
 
-    # Special case: single polr learner — bypass parsnip entirely
+    # Special case: single polr learner -- bypass parsnip entirely
     if (length(learner_names) == 1 && identical(learner_names[[1]], "polr")) {
       prepped  <- recipes::prep(rec, training = df)
       baked    <- recipes::bake(prepped, new_data = df)
@@ -655,7 +660,7 @@ check_datatype <- function(x) {
 #' for all incomplete variables, paginated in grids of up to 3 variables per
 #' page. Stable traces that mix well across datasets indicate convergence.
 #' Note that trace statistics are only computed for continuous and numeric
-#' binary columns — categorical and ordinal columns are excluded automatically.
+#' binary columns -- categorical and ordinal columns are excluded automatically.
 #'
 #' @param misl_result A list returned by \code{\link{misl}()}.
 #' @param ncol Number of columns per page. Default \code{2}.
@@ -689,7 +694,7 @@ plot_misl_trace <- function(misl_result, ncol = 2, nrow = 3) {
   trace <- trace[!is.na(trace$value), ]
 
   if (nrow(trace) == 0) {
-    message("No trace data available — trace is only computed for continuous ",
+    message("No trace data available -- trace is only computed for continuous ",
             "and numeric binary columns.")
     return(invisible(trace))
   }
@@ -714,7 +719,7 @@ plot_misl_trace <- function(misl_result, ncol = 2, nrow = 3) {
         ggplot2::geom_line() +
         ggplot2::geom_point(size = 1.5) +
         ggforce::facet_wrap_paginate(
-          variable ~ statistic,
+          ggplot2::vars(variable, statistic),
           scales   = "free",
           ncol     = ncol,
           nrow     = nrow,
