@@ -480,47 +480,65 @@ test_that("misl() backwards compatible: character vector still works", {
 
 # ── plot_misl_trace() ─────────────────────────────────────────────────────────
 
-test_that("plot_misl_trace() runs without error for continuous variable", {
+test_that("plot_misl_trace() runs without error", {
+  skip_if_not_installed("ggplot2")
+  skip_if_not_installed("ggforce")
   result <- misl(make_cont_data(), m = 3, maxit = 3, con_method = "glm", seed = 1)
-  expect_no_error(plot_misl_trace(result, variable = "y"))
-})
-
-test_that("plot_misl_trace() runs for statistic = 'sd'", {
-  result <- misl(make_cont_data(), m = 3, maxit = 3, con_method = "glm", seed = 1)
-  expect_no_error(plot_misl_trace(result, variable = "y", statistic = "sd"))
+  expect_no_error(plot_misl_trace(result))
 })
 
 test_that("plot_misl_trace() returns trace data invisibly", {
+  skip_if_not_installed("ggplot2")
+  skip_if_not_installed("ggforce")
   result <- misl(make_cont_data(), m = 3, maxit = 3, con_method = "glm", seed = 1)
-  out <- plot_misl_trace(result, variable = "y")
+  out <- plot_misl_trace(result)
   expect_s3_class(out, "data.frame")
-  expect_true(all(c("statistic", "variable", "m", "iteration", "value") %in% colnames(out)))
+  expect_true(all(c("statistic", "variable", "m", "iteration", "value") %in%
+                    colnames(out)))
 })
 
-test_that("plot_misl_trace() errors on unknown variable", {
-  result <- misl(make_cont_data(), m = 2, maxit = 2, con_method = "glm", seed = 1)
-  expect_error(plot_misl_trace(result, variable = "nonexistent"), "not found in trace data")
+test_that("plot_misl_trace() drops categorical variables silently", {
+  skip_if_not_installed("ggplot2")
+  skip_if_not_installed("ggforce")
+  result <- misl(make_mixed_data(), m = 2, maxit = 2,
+                 con_method = "glm", bin_method = "glm",
+                 cat_method = "rand_forest", seed = 4)
+  out <- plot_misl_trace(result)
+  # cat column should not appear in trace output since it has no trace values
+  expect_false("cat" %in% unique(out$variable))
 })
 
-test_that("plot_misl_trace() errors on categorical variable", {
-  result <- misl(make_cat_data(), m = 2, maxit = 2, cat_method = "rand_forest", seed = 3)
-  expect_error(plot_misl_trace(result, variable = "y"), "not available")
+test_that("plot_misl_trace() returns message when no trace data available", {
+  skip_if_not_installed("ggplot2")
+  skip_if_not_installed("ggforce")
+  result <- misl(make_cat_data(), m = 2, maxit = 2,
+                 cat_method = "rand_forest", seed = 3)
+  expect_message(plot_misl_trace(result), "No trace data available")
 })
 
-test_that("plot_misl_trace() errors on ordinal variable", {
-  skip_if_not_installed("MASS")
-  result <- misl(make_ord_data(), m = 2, maxit = 2, ord_method = "polr", seed = 6)
-  expect_error(plot_misl_trace(result, variable = "y"), "not available")
-})
-
-test_that("plot_misl_trace() errors on invalid statistic", {
-  result <- misl(make_cont_data(), m = 2, maxit = 2, con_method = "glm", seed = 1)
-  expect_error(plot_misl_trace(result, variable = "y", statistic = "median"), "should be one of")
-})
-
-test_that("plot_misl_trace() accepts custom ylab", {
+test_that("plot_misl_trace() accepts custom ncol and nrow", {
+  skip_if_not_installed("ggplot2")
+  skip_if_not_installed("ggforce")
   result <- misl(make_cont_data(), m = 3, maxit = 3, con_method = "glm", seed = 1)
-  expect_no_error(plot_misl_trace(result, variable = "y", ylab = "Custom label"))
+  expect_no_error(plot_misl_trace(result, ncol = 1, nrow = 2))
+})
+
+test_that("plot_misl_trace() errors when ggplot2 not available", {
+  result <- misl(make_cont_data(), m = 2, maxit = 2, con_method = "glm", seed = 1)
+  local_mocked_bindings(
+    requireNamespace = function(pkg, ...) if (pkg == "ggplot2") FALSE else TRUE,
+    .package = "base"
+  )
+  expect_error(plot_misl_trace(result), "ggplot2")
+})
+
+test_that("plot_misl_trace() errors when ggforce not available", {
+  result <- misl(make_cont_data(), m = 2, maxit = 2, con_method = "glm", seed = 1)
+  local_mocked_bindings(
+    requireNamespace = function(pkg, ...) if (pkg == "ggforce") FALSE else TRUE,
+    .package = "base"
+  )
+  expect_error(plot_misl_trace(result), "ggforce")
 })
 
 test_that("misl() errors with a helpful message for unknown learner", {

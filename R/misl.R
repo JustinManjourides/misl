@@ -8,7 +8,6 @@
 #   - list_learners() updated with ordinal column and polr learner
 
 #' @importFrom stats predict runif sd as.formula
-#' @importFrom graphics plot axis lines points legend
 NULL
 
 # ---------------------------------------------------------------------------- #
@@ -36,7 +35,7 @@ NULL
 #'   Default \code{c("rand_forest", "boost_tree")}.
 #' @param ord_method Character vector of learner IDs, a list of parsnip model
 #'   specs, or a mixed list of both, for ordered categorical columns.
-#'   Default \code{c("polr")}.
+#'   Default \code{c("polr", "rand_forest", "boost_tree")}.
 #' @param cv_folds Integer number of cross-validation folds used when stacking
 #'   multiple learners. Reducing this (e.g. to \code{3}) speeds up computation
 #'   at a small cost to ensemble accuracy. Default \code{5}. Ignored when only
@@ -116,7 +115,7 @@ misl <- function(dataset,
                  con_method        = c("glm", "rand_forest", "boost_tree"),
                  bin_method        = c("glm", "rand_forest", "boost_tree"),
                  cat_method        = c("rand_forest", "boost_tree"),
-                 ord_method        = c("polr"),
+                 ord_method        = c("polr", "rand_forest", "boost_tree"),
                  cv_folds          = 5,
                  ignore_predictors = NA,
                  quiet             = TRUE) {
@@ -652,20 +651,17 @@ check_datatype <- function(x) {
 
 #' Plot trace statistics from a MISL imputation
 #'
-#' Plots the mean or standard deviation of imputed values across iterations
-#' for a given variable, with one line per imputed dataset. Stable traces
-#' that mix well across datasets indicate convergence.
+#' Plots the mean and standard deviation of imputed values across iterations
+#' for all incomplete variables, paginated in grids of up to 3 variables per
+#' page. Stable traces that mix well across datasets indicate convergence.
+#' Note that trace statistics are only computed for continuous and numeric
+#' binary columns — categorical and ordinal columns are excluded automatically.
 #'
 #' @param misl_result A list returned by \code{\link{misl}()}.
-#' @param variable A character string naming the variable to plot. Must be
-#'   a continuous or numeric binary column — trace statistics are not
-#'   computed for categorical or ordinal columns.
-#' @param statistic One of \code{"mean"} (default) or \code{"sd"}.
-#' @param ylab A character string for the y-axis label. Defaults to
-#'   \code{"variable (statistic)"}.
-#' @param ... Additional arguments passed to \code{\link[graphics]{plot}()}.
+#' @param ncol Number of columns per page. Default \code{2}.
+#' @param nrow Number of rows per page. Default \code{3}.
 #'
-#' @return Invisibly returns the trace data used for the plot.
+#' @return Invisibly returns the long-format trace data frame used for plotting.
 #' @export
 #'
 #' @examples
@@ -674,64 +670,64 @@ check_datatype <- function(x) {
 #' demo_data <- data.frame(x1 = rnorm(n), x2 = rnorm(n), y = rnorm(n))
 #' demo_data[sample(n, 10), "y"] <- NA
 #' misl_imp <- misl(demo_data, m = 3, maxit = 3, con_method = "glm")
-#' plot_misl_trace(misl_imp, variable = "y")
-#' plot_misl_trace(misl_imp, variable = "y", statistic = "sd")
-plot_misl_trace <- function(misl_result, variable, statistic = "mean", ylab = NULL, ...) {
+#' plot_misl_trace(misl_imp)
+plot_misl_trace <- function(misl_result, ncol = 2, nrow = 3) {
 
-  statistic <- match.arg(statistic, c("mean", "sd"))
+  if (!requireNamespace("ggplot2", quietly = TRUE)) {
+    stop("Package 'ggplot2' is required for plot_misl_trace(). ",
+         "Install it with: install.packages('ggplot2')")
+  }
+  if (!requireNamespace("ggforce", quietly = TRUE)) {
+    stop("Package 'ggforce' is required for plot_misl_trace(). ",
+         "Install it with: install.packages('ggforce')")
+  }
 
-  # Combine trace data across all m datasets
+  # Combine trace data across all m datasets and drop NAs
+  # (categorical and ordinal columns have NA trace values)
   trace <- do.call(rbind, lapply(misl_result, function(r) r$trace))
+  trace <- trace[stats::complete.cases(trace), ]
+  trace <- trace[!is.na(trace$value), ]
 
-  # Validate variable
-  if (!variable %in% unique(trace$variable)) {
-    stop("'", variable, "' not found in trace data. Available variables: ",
-         paste(unique(trace$variable), collapse = ", "))
+  if (nrow(trace) == 0) {
+    message("No trace data available — trace is only computed for continuous ",
+            "and numeric binary columns.")
+    return(invisible(trace))
   }
 
-  d <- subset(trace, trace$variable == variable & trace$statistic == statistic)
+  trace$m         <- as.factor(trace$m)
+  trace$iteration <- as.integer(trace$iteration)
 
-  # Check trace values are not all NA (categorical/ordinal columns)
-  if (all(is.na(d$value))) {
-    stop("Trace statistics are not available for '", variable,
-         "'. Trace is only computed for continuous and numeric binary columns.")
+  n_panels  <- length(unique(trace$variable)) * length(unique(trace$statistic))
+  num_pages <- ceiling(n_panels / (ncol * nrow))
+
+  for (page_num in seq_len(num_pages)) {
+    print(
+      ggplot2::ggplot(
+        trace,
+        ggplot2::aes(
+          x     = iteration,
+          y     = value,
+          group = m,
+          color = m
+        )
+      ) +
+        ggplot2::geom_line() +
+        ggplot2::geom_point(size = 1.5) +
+        ggforce::facet_wrap_paginate(
+          variable ~ statistic,
+          scales   = "free",
+          ncol     = ncol,
+          nrow     = nrow,
+          page     = page_num
+        ) +
+        ggplot2::scale_x_continuous(breaks = scales::breaks_pretty()) +
+        ggplot2::labs(x = "Iteration", y = "Value", color = "Dataset (m)") +
+        ggplot2::theme_bw() +
+        ggplot2::theme(legend.position = "bottom")
+    )
   }
 
-  if (is.null(ylab)) {
-    ylab <- paste0(statistic, " imputed ", variable)
-  }
-
-  chains <- unique(d$m)
-
-  graphics::plot(
-    d$iteration, d$value,
-    col  = d$m,
-    pch  = 16,
-    type = "n",
-    xlab = "Iteration",
-    ylab = ylab,
-    main = paste0("Trace: ", statistic, " imputed ", variable),
-    xaxt = "n",
-    ...
-  )
-  graphics::axis(1, at = seq_len(max(d$iteration)))
-
-  for (chain in chains) {
-    d_chain <- d[d$m == chain, ]
-    graphics::lines(d_chain$iteration, d_chain$value, col = chain)
-    graphics::points(d_chain$iteration, d_chain$value, col = chain, pch = 16)
-  }
-
-  graphics::legend(
-    "topright",
-    legend = paste("m =", chains),
-    col    = chains,
-    pch    = 16,
-    lty    = 1,
-    cex    = 0.7
-  )
-
-  invisible(d)
+  invisible(trace)
 }
 
 #' Predict method for misl_polr_fit objects

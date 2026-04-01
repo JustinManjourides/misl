@@ -4,29 +4,24 @@
 \alias{plot_misl_trace}
 \title{Plot trace statistics from a MISL imputation}
 \usage{
-plot_misl_trace(misl_result, variable, statistic = "mean", ylab = NULL, ...)
+plot_misl_trace(misl_result, ncol = 2, nrow = 3)
 }
 \arguments{
 \item{misl_result}{A list returned by \code{\link{misl}()}.}
 
-\item{variable}{A character string naming the variable to plot. Must be
-a continuous or numeric binary column — trace statistics are not
-computed for categorical or ordinal columns.}
+\item{ncol}{Number of columns per page. Default \code{2}.}
 
-\item{statistic}{One of \code{"mean"} (default) or \code{"sd"}.}
-
-\item{ylab}{A character string for the y-axis label. Defaults to
-\code{"variable (statistic)"}.}
-
-\item{...}{Additional arguments passed to \code{\link[graphics]{plot}()}.}
+\item{nrow}{Number of rows per page. Default \code{3}.}
 }
 \value{
-Invisibly returns the trace data used for the plot.
+Invisibly returns the long-format trace data frame used for plotting.
 }
 \description{
-Plots the mean or standard deviation of imputed values across iterations
-for a given variable, with one line per imputed dataset. Stable traces
-that mix well across datasets indicate convergence.
+Plots the mean and standard deviation of imputed values across iterations
+for all incomplete variables, paginated in grids of up to 3 variables per
+page. Stable traces that mix well across datasets indicate convergence.
+Note that trace statistics are only computed for continuous and numeric
+binary columns — categorical and ordinal columns are excluded automatically.
 }
 \examples{
 set.seed(1)
@@ -34,6 +29,5 @@ n <- 100
 demo_data <- data.frame(x1 = rnorm(n), x2 = rnorm(n), y = rnorm(n))
 demo_data[sample(n, 10), "y"] <- NA
 misl_imp <- misl(demo_data, m = 3, maxit = 3, con_method = "glm")
-plot_misl_trace(misl_imp, variable = "y")
-plot_misl_trace(misl_imp, variable = "y", statistic = "sd")
+plot_misl_trace(misl_imp)
 }
