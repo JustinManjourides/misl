@@ -12,7 +12,6 @@ Authors@R:c(
     person(
       given   = "Thomas",
       family  = "Carpenito",
-      email   = "carpenito.t@northeastern.edu",
       role    = "aut",
       comment = c(ORCID = "0000-0003-3591-0680")
     )
