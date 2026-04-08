@@ -1,8 +1,7 @@
-## R CMD check results
-── R CMD check results ───────────── misl 2.0.0 ────
-Duration: 1m 9.7s
+── R CMD check results ───────────────────────── misl 2.0.0 ────
+Duration: 1m 45.1s
+
 0 errors ✔ | 0 warnings ✔ | 0 notes ✔
-* This is a new release.
 
 ## Test environments
 * macOS (local), R 4.4.1
@@ -10,10 +9,8 @@ Duration: 1m 9.7s
 * Windows (win-builder), R release
 * Linux (rhub)
 * Windows (rhub)
-* macos-arm64 (rhub) -- note: check passed but binary tarball
-  creation failed due to a known rhub infrastructure issue
-  (Error in if (custom.bin) { : argument is of length zero).
-  This is unrelated to the package code.
+* m1-san (rhub)
+* macos-arm64 (rhub) 
 
 ## Changes in v2.0.0 relative to v1.0.0
 * Added `ord_method` argument to `misl()` for ordered categorical (ordinal)
