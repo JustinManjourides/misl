@@ -1,0 +1,33 @@
+url: https://justinmanjourides.github.io/misl/
+template:
+  bootstrap: 5
+home:
+  title: 'misl: Multiple Imputation by Super Learning'
+  description: |
+    Performs multiple imputation of missing data using an ensemble super learner built with the tidymodels framework.
+navbar:
+  structure:
+    left:
+    - intro
+    - reference
+    - articles
+    right: github
+  logo:
+    src: man/figures/logo.png
+    href: https://JustinManjourides.github.io/misl
+  components:
+    github:
+      icon: fab fa-github
+      href: https://github.com/JustinManjourides/misl
+      aria-label: GitHub
+reference:
+- title: Core functions
+  desc: Main imputation and helper functions
+  contents:
+  - misl
+  - list_learners
+  - plot_misl_trace
+articles:
+- title: Getting started
+  contents: misl-introduction
+

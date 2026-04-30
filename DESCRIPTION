@@ -1,7 +1,7 @@
 Package: misl
 Title: Multiple Imputation by Super Learning
 Version: 2.0.0
-Authors@R:c(
+Authors@R: c(
     person(
       given   = "Justin",
       family  = "Manjourides",
@@ -24,7 +24,7 @@ Description: Performs multiple imputation of missing data using an ensemble
     probability draws (categorical). Supports parallelism across imputed
     datasets via the future framework.
 License: MIT + file LICENSE
-URL: https://github.com/JustinManjourides/misl
+URL: https://JustinManjourides.github.io/misl, https://github.com/JustinManjourides/misl, https://justinmanjourides.github.io/misl/
 BugReports: https://github.com/JustinManjourides/misl/issues
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
