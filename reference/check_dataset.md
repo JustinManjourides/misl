@@ -13,4 +13,4 @@ check_dataset(dataset)
 - dataset:
 
   The object passed to
-  [`misl()`](https://justinmanjourides.github.io/misl/reference/misl.md).
+  [`misl()`](https://JustinManjourides.github.io/misl/reference/misl.md).

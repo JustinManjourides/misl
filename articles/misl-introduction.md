@@ -72,7 +72,7 @@ sapply(sim_data, function(x) sum(is.na(x)))
 ## Built-in learners
 
 Use
-[`list_learners()`](https://justinmanjourides.github.io/misl/reference/list_learners.md)
+[`list_learners()`](https://JustinManjourides.github.io/misl/reference/list_learners.md)
 to see the available named learners, optionally filtered by outcome
 type:
 
@@ -104,7 +104,7 @@ knitr::kable(list_learners("ordinal"))
 ## Basic usage
 
 The primary function is
-[`misl()`](https://justinmanjourides.github.io/misl/reference/misl.md).
+[`misl()`](https://JustinManjourides.github.io/misl/reference/misl.md).
 Supply a dataset and specify:
 
 - `m` – the number of multiply imputed datasets to create
@@ -113,7 +113,7 @@ Supply a dataset and specify:
   each outcome type
 
 Running
-[`misl()`](https://justinmanjourides.github.io/misl/reference/misl.md)
+[`misl()`](https://JustinManjourides.github.io/misl/reference/misl.md)
 with a single named learner per outcome type is the fastest option and
 is well suited for exploratory work. Note that ordered factors are
 automatically detected and routed to `ord_method`:
@@ -133,7 +133,7 @@ misl_imp <- misl(
 )
 ```
 
-[`misl()`](https://justinmanjourides.github.io/misl/reference/misl.md)
+[`misl()`](https://JustinManjourides.github.io/misl/reference/misl.md)
 returns a list of length `m`. Each element contains:
 
 - `$datasets` – the fully imputed tibble
@@ -339,7 +339,7 @@ pooled_mice <- summary(pool(models), conf.int = TRUE)
 ## Convergence: trace plots
 
 The
-[`plot_misl_trace()`](https://justinmanjourides.github.io/misl/reference/plot_misl_trace.md)
+[`plot_misl_trace()`](https://JustinManjourides.github.io/misl/reference/plot_misl_trace.md)
 function plots the mean or standard deviation of imputed values across
 iterations for a given variable, with one line per imputed dataset.
 Stable traces that mix well across datasets indicate convergence. Note
@@ -367,7 +367,7 @@ converged.
 The `m` imputed datasets are generated independently and can be run in
 parallel using the `future` framework. Set a parallel plan before
 calling
-[`misl()`](https://justinmanjourides.github.io/misl/reference/misl.md):
+[`misl()`](https://JustinManjourides.github.io/misl/reference/misl.md):
 
 ``` r
 

@@ -6,14 +6,14 @@ CRAN release: 2026-04-08
 
 ### New features
 
-- [`misl()`](https://justinmanjourides.github.io/misl/reference/misl.md)
+- [`misl()`](https://JustinManjourides.github.io/misl/reference/misl.md)
   now accepts any parsnip-compatible model spec directly via the
   `*_method` arguments, allowing any learner in the tidymodels ecosystem
   to be used without requiring a package update. Named strings and
   parsnip specs can be freely mixed in the same list.
 
 - New `ord_method` argument in
-  [`misl()`](https://justinmanjourides.github.io/misl/reference/misl.md)
+  [`misl()`](https://JustinManjourides.github.io/misl/reference/misl.md)
   for ordered categorical (ordinal) outcomes. Ordered factors are
   automatically detected and routed to `ord_method`.
 
@@ -26,20 +26,20 @@ CRAN release: 2026-04-08
   ordinal outcomes is planned for a future release.
 
 - New
-  [`plot_misl_trace()`](https://justinmanjourides.github.io/misl/reference/plot_misl_trace.md)
+  [`plot_misl_trace()`](https://JustinManjourides.github.io/misl/reference/plot_misl_trace.md)
   function for visualising convergence of imputed values across
   iterations, with one line per imputed dataset.
 
-- [`list_learners()`](https://justinmanjourides.github.io/misl/reference/list_learners.md)
+- [`list_learners()`](https://JustinManjourides.github.io/misl/reference/list_learners.md)
   now accepts `"ordinal"` as a valid `outcome_type` filter and includes
   the new `ordinal` support column.
 
 ### Bug fixes
 
 - `cv_folds` argument is now correctly passed through to the internal
-  [`.fit_super_learner()`](https://justinmanjourides.github.io/misl/reference/dot-fit_super_learner.md)
+  [`.fit_super_learner()`](https://JustinManjourides.github.io/misl/reference/dot-fit_super_learner.md)
   function. Previously the value was accepted by
-  [`misl()`](https://justinmanjourides.github.io/misl/reference/misl.md)
+  [`misl()`](https://JustinManjourides.github.io/misl/reference/misl.md)
   but ignored, with 5 folds always used regardless of the user’s
   setting.
 

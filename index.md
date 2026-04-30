@@ -1,14 +1,5 @@
 # misl
 
-[![CRAN
-status](https://www.r-pkg.org/badges/version/misl)](https://CRAN.R-project.org/package=misl)
-[![CRAN
-downloads](https://cranlogs.r-pkg.org/badges/misl)](https://cran.r-project.org/package=misl)
-[![Lifecycle:
-stable](https://img.shields.io/badge/lifecycle-stable-brightgreen.svg)](https://lifecycle.r-lib.org/articles/stages.html#stable)
-[![License:
-MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-
 > **Note:** This package is currently experimental and under active
 > development. The API may change. Feedback and bug reports are welcome
 > via [GitHub Issues](https://github.com/JustinManjourides/misl/issues).
@@ -96,7 +87,7 @@ trace <- misl_imp[[1]]$trace
 Imputation across the `m` datasets is parallelised via the
 [future](https://future.futureverse.org/) framework. To enable parallel
 execution, set a plan before calling
-[`misl()`](https://justinmanjourides.github.io/misl/reference/misl.md):
+[`misl()`](https://JustinManjourides.github.io/misl/reference/misl.md):
 
 ``` r
 
@@ -152,4 +143,4 @@ BibTeX:
 
 ## License
 
-MIT © see [LICENSE](https://justinmanjourides.github.io/misl/LICENSE)
+MIT © see [LICENSE](https://JustinManjourides.github.io/misl/LICENSE)

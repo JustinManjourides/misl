@@ -18,7 +18,7 @@ plot_misl_trace(misl_result, ncol = 2, nrow = 3)
 - misl_result:
 
   A list returned by
-  [`misl()`](https://justinmanjourides.github.io/misl/reference/misl.md).
+  [`misl()`](https://JustinManjourides.github.io/misl/reference/misl.md).
 
 - ncol:
 

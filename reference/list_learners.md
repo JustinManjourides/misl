@@ -1,7 +1,7 @@
 # List available learners for MISL imputation
 
 Displays the built-in named learners available for use in
-[`misl()`](https://justinmanjourides.github.io/misl/reference/misl.md).
+[`misl()`](https://JustinManjourides.github.io/misl/reference/misl.md).
 Note that any parsnip-compatible model spec can also be passed directly
 via the `*_method` arguments.
 

@@ -1,14 +1,5 @@
 # misl
 
-[![CRAN
-status](https://www.r-pkg.org/badges/version/misl)](https://CRAN.R-project.org/package=misl)
-[![CRAN
-downloads](https://cranlogs.r-pkg.org/badges/misl)](https://cran.r-project.org/package=misl)
-[![Lifecycle:
-stable](https://img.shields.io/badge/lifecycle-stable-brightgreen.svg)](https://lifecycle.r-lib.org/articles/stages.html#stable)
-[![License:
-MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-
 > **Note:** This package is currently experimental and under active
 > development. The API may change. Feedback and bug reports are welcome
 > via [GitHub Issues](https://github.com/JustinManjourides/misl/issues).
@@ -96,7 +87,7 @@ trace <- misl_imp[[1]]$trace
 Imputation across the `m` datasets is parallelised via the
 [future](https://future.futureverse.org/) framework. To enable parallel
 execution, set a plan before calling
-[`misl()`](https://justinmanjourides.github.io/misl/reference/misl.md):
+[`misl()`](https://JustinManjourides.github.io/misl/reference/misl.md):
 
 ``` r
 
@@ -152,7 +143,7 @@ BibTeX:
 
 ## License
 
-MIT © see [LICENSE](https://justinmanjourides.github.io/misl/LICENSE)
+MIT © see [LICENSE](https://JustinManjourides.github.io/misl/LICENSE)
 
 # Package index
 
@@ -160,11 +151,11 @@ MIT © see [LICENSE](https://justinmanjourides.github.io/misl/LICENSE)
 
 Main imputation and helper functions
 
-- [`misl()`](https://justinmanjourides.github.io/misl/reference/misl.md)
+- [`misl()`](https://JustinManjourides.github.io/misl/reference/misl.md)
   : MISL: Multiple Imputation by Super Learning (v2.0)
-- [`list_learners()`](https://justinmanjourides.github.io/misl/reference/list_learners.md)
+- [`list_learners()`](https://JustinManjourides.github.io/misl/reference/list_learners.md)
   : List available learners for MISL imputation
-- [`plot_misl_trace()`](https://justinmanjourides.github.io/misl/reference/plot_misl_trace.md)
+- [`plot_misl_trace()`](https://JustinManjourides.github.io/misl/reference/plot_misl_trace.md)
   : Plot trace statistics from a MISL imputation
 
 # Articles
@@ -172,4 +163,4 @@ Main imputation and helper functions
 ### Getting started
 
 - [Introduction to
-  misl](https://justinmanjourides.github.io/misl/articles/misl-introduction.md):
+  misl](https://JustinManjourides.github.io/misl/articles/misl-introduction.md):

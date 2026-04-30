@@ -95,7 +95,7 @@ A list of `m` named lists, each with:
 ## Details
 
 Built-in named learners (see
-[`list_learners()`](https://justinmanjourides.github.io/misl/reference/list_learners.md)):
+[`list_learners()`](https://JustinManjourides.github.io/misl/reference/list_learners.md)):
 
 - `"glm"` - base R (logistic for binary, linear for continuous)
 
