@@ -1,5 +1,14 @@
 # misl
 
+[![CRAN
+status](https://www.r-pkg.org/badges/version/misl)](https://CRAN.R-project.org/package=misl)
+[![CRAN
+downloads](https://cranlogs.r-pkg.org/badges/misl)](https://cran.r-project.org/package=misl)
+[![Lifecycle:
+stable](https://img.shields.io/badge/lifecycle-stable-brightgreen.svg)](https://lifecycle.r-lib.org/articles/stages.html#stable)
+[![License:
+MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 > **Note:** This package is currently experimental and under active
 > development. The API may change. Feedback and bug reports are welcome
 > via [GitHub Issues](https://github.com/JustinManjourides/misl/issues).
