@@ -124,7 +124,7 @@ BibTeX:
 ``` bibtex
 @article{carpenito2022misl,
   author  = {Carpenito, T and Manjourides, J},
-  title   = {{MISL}: Multiple imputation by super learning},
+  title   = {MISL: Multiple imputation by super learning},
   journal = {Statistical Methods in Medical Research},
   year    = {2022},
   volume  = {31},
